@@ -14,6 +14,7 @@ conf.read("config.cfg")
 
 resolution = conf.get('config', 'resolution')
 langs = conf.get('config', 'langs')
+langs = langs.replace(' ', '').replace('"', '').replace("'", '').strip('[]').split('","')
 screenshot = conf.get('config', 'screenshot')
 devblog = conf.get('config', 'devblog')
 
