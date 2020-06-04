@@ -18,27 +18,27 @@ langs = langs.replace(' ', '').replace('"', '').replace("'", '').strip('[]').spl
 screenshot = conf.get('config', 'screenshot') == "True"
 devblog = conf.get('config', 'devblog') == "True"
 
-print("This tool will download wallpapers from the WarThunder website in a wallpapers folder in the same folder as this tool. The duration will depends on what you want to download and on your bandwidth")
-print("To change parameters (ie : what to download), edit the config.cfg file.\n")
-print("Curent parameters :")
-print("Resolution : ", resolution)
-print("Download website(s) : ", langs)
-print("Download screenshot : ", screenshot)
-print("Download wallpapers from devblogs : ", devblog)
+print("Ce programme va télécharger des fonds d'écrans issus du site de WarThunder dans un dossier wallpapers dans le même dossier que cet outil. Le processus sera plus ou moins long selon votre connexion.")
+print("Pour changer les paramètres merci de modifier le fichier config.cfg.\n")
+print("Paramètres actuels :")
+print("Résolution : ", resolution)
+print("Sites de téléchargement : ", langs)
+print("Téléchargement des screenshots : ", screenshot)
+print("Téléchargement des fonds d'écrans de devblogs : ", devblog)
 
 #Creating a wallpapers folder, if already exists but empty continue, else prompt the user to delete it
 try :
     os.makedirs('wallpapers/')
-    print("Creating a wallpapers folder !")
+    print("Creation d'un dossier wallpapers !")
 except :
     if os.listdir('wallpapers/') != [] :
-        input("Please delete the wallpapers folder, this tool will create one.\nPress ENTER to exit.")
+        input("Merci de supprimez le dossier wallpapers, cet utilitaire se chargera de le créer.\nAppuyez sur ENTRER pour terminer.")
         sys.exit()
     else :
         pass
 
-input("Press ENTER to confirm")
-print("Starting to download wallpapers in the wallpapers folder !")
+input("Appuyez sur ENTRER pour confirmer")
+print("Début de l'enregistrement des images dans le dossier Wallpapers !")
 
 nombres_images = 0
 lost = 0
@@ -71,14 +71,14 @@ for lang in langs :
                 handler.write(img_data)
 
         nombres_images += len(image_links)
-        print(str(len(image_links)) + " images were downloaded from " + url)
+        print(str(len(image_links)) + " images ont été récupérées à partir de " + url)
         page += 1
 
 #screenshots
 #Pretty same as above but for the screenshot page which has more or less the same structure
 if screenshot :
     nombres_images = 0
-    print("Downloading screenshots")
+    print("Téléchargement des screenshots")
     for lang in langs :
         r = requests.get("https://warthunder.com/")
         page = 1
@@ -104,14 +104,14 @@ if screenshot :
                     handler.write(img_data)
 
             nombres_images += len(image_links)
-            print(str(len(image_links)) + " images were downloaded from " + url)
+            print(str(len(image_links)) + " images ont été récupérées à partir de " + url)
             page += 1
 
 #devblogs
 #devblog are quite differents as we are getting devblogs links then getting the wallpaper link if it exists and then saving it as temp once again
 if devblog :
     nombres_images = 0
-    print("Downloading wallpapers from devblogs.")
+    print("Téléchargement des fonds d'écrans des devblogs.")
     r = requests.get("https://warthunder.com/")
     page = 1
     stop = False
@@ -152,7 +152,7 @@ if devblog :
                 lost += 1   #We need to keep track of "lost" images because some devblogs don't have wallpapers
 
         nombres_images += len(image_links) - lost
-        print(str(len(image_links) - lost) + " images were downloaded from " + url)
+        print(str(len(image_links) - lost) + " images ont été récupérées à partir de " + url)
         page += 1
 
 
@@ -172,13 +172,13 @@ for index, filename in enumerate(os.listdir('wallpapers/')) :
         else:
             duplicates.append((index,hash_keys[filehash]))
 
-print("Removing " + str(len(duplicates)) + " doubles !")
+print("Suppression de " + str(len(duplicates)) + " doublons !")
 
 for index in duplicates :
     #removing duplicates
     os.remove('wallpapers/' + file_list[index[0]])
 
-print("Reorganising files !")
+print("Réorganisation des fichiers !")
 
 file_list = os.listdir('wallpapers/')
 #We now have an incomplete count (ie : 0 - 1 - 3 - 7 - 8...) and we want an homogeneous one
@@ -216,6 +216,6 @@ for i in range(len(working_file_list)) :
     os.rename('wallpapers/' + working_file_list[i], "wallpapers/wallpaper_" + str(i) + ".jpg")
 
 #Conclusion
-print(str(len(os.listdir('wallpapers/'))) + " unique images saved in the wallpapers folder !")
-print("Thank you for using this tool made with ♥ by Rudlu")
-input("Press ENTER to exit")
+print(str(len(os.listdir('wallpapers/'))) + " images uniques enregistrées !")
+print("Merci d'avoir utilisé ce programme fait avec ♥ par Rudlu")
+input("Appuyez sur ENTRER pour terminer")
