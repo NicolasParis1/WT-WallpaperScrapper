@@ -4,6 +4,7 @@ import hashlib
 import os
 import sys
 import configparser
+import threading
 
 #Made in french then translated, sorry for french variable names
 
@@ -43,14 +44,23 @@ print("Starting to download wallpapers in the wallpapers folder !")
 nombres_images = 0
 lost = 0
 
+def download(url, filename) :
+    img_data = requests.get(url).content
+    with open(filename, 'wb') as handler:
+        handler.write(img_data)
+
+def createNewDownloadThread(url, filename):
+    download_thread = threading.Thread(target=download, args=(url, filename))
+    download_thread.start()
+
 #Looping through each language the user selected
 for lang in langs :
-    r = requests.get("https://warthunder.com/") #initiating first connection, used for the while loop
+    r = requests.get("https://warthunder.com/", stream = True) #initiating first connection, used for the while loop
     page = 1
 
     while r.status_code == 200 :    #looping until it gets a 404 error
         url = "https://warthunder.com/" + lang + "/media/wallpapers/page/" + str(page)
-        r = requests.get(url)
+        r = requests.get(url, stream = True)
 
         soup = BeautifulSoup(r.text, 'html.parser')
 
@@ -66,12 +76,13 @@ for lang in langs :
                 lost += 1
         #Saving images from the links as temp to reorganise them later
         for i in range(len(image_links)) :
-            img_data = requests.get(image_links[i]).content
-            with open('wallpapers/wallpaper_' + str(i + nombres_images) + '_temp.jpg', 'wb') as handler:
-                handler.write(img_data)
+            img_link = image_links[i]
+            filename = 'wallpapers/wallpaper_' + str(i + nombres_images) + '_temp.jpg'
+            createNewDownloadThread(img_link, filename)
 
         nombres_images += len(image_links)
-        print(str(len(image_links)) + " images were downloaded from " + url)
+        if len(image_links) != 0 :
+            print(str(len(image_links)) + " images were downloaded from " + url)
         page += 1
 
 #screenshots
@@ -99,12 +110,13 @@ if screenshot :
                     pass
 
             for i in range(len(image_links)) :
-                img_data = requests.get(image_links[i]).content
-                with open('wallpapers/screenshot_' + str(i + nombres_images) + '_temp.jpg', 'wb') as handler:
-                    handler.write(img_data)
+                img_link = image_links[i]
+                filename = 'wallpapers/screenshot_' + str(i + nombres_images) + '_temp.jpg'
+                createNewDownloadThread(img_link, filename)
 
             nombres_images += len(image_links)
-            print(str(len(image_links)) + " images were downloaded from " + url)
+            if len(image_links) != 0 :
+                print(str(len(image_links)) + " images were downloaded from " + url)
             page += 1
 
 #devblogs
@@ -144,9 +156,8 @@ if devblog :
                     pass
                 else :
                     img_link = "https://static.warthunder.com/" + img_link
-                img_data = requests.get(img_link).content
-                with open('wallpapers/devblog_' + str(i + nombres_images) + '_temp.jpg', 'wb') as handler:
-                    handler.write(img_data)
+                filename = 'wallpapers/devblog_' + str(i + nombres_images) + '_temp.jpg'
+                createNewDownloadThread(img_link, filename)
                 stop = False    #If it doesn't find a wallpaper for a whole page, the loop stops because the older devblogs don't have any wallpapers
             except :
                 lost += 1   #We need to keep track of "lost" images because some devblogs don't have wallpapers
