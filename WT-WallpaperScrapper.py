@@ -1,14 +1,21 @@
 import requests
 from bs4 import BeautifulSoup
-import hashlib
 import os
 import sys
 import configparser
 import threading
+import re
+import concurrent.futures
+from tqdm import tqdm
+import dhash
+from PIL import Image
 
 #Made in french then translated, sorry for french variable names
 
 #Initialisation
+global date
+global resolution
+
 #reading config file
 conf = configparser.ConfigParser()
 conf.read("config.cfg")
@@ -18,6 +25,7 @@ langs = conf.get('config', 'langs')
 langs = langs.replace(' ', '').replace('"', '').replace("'", '').strip('[]').split(',')
 screenshot = conf.get('config', 'screenshot') == "True"
 devblog = conf.get('config', 'devblog') == "True"
+date = int(conf.get('config', 'date'))
 
 print("This tool will download wallpapers from the WarThunder website in a wallpapers folder in the same folder as this tool. The duration will depends on what you want to download and on your bandwidth")
 print("To change parameters (ie : what to download), edit the config.cfg file.\n")
@@ -26,6 +34,7 @@ print("Resolution : ", resolution)
 print("Download website(s) : ", langs)
 print("Download screenshot : ", screenshot)
 print("Download wallpapers from devblogs : ", devblog)
+print("Will not download images prior to : ", date)
 
 #Creating a wallpapers folder, if already exists but empty continue, else prompt the user to delete it
 try :
@@ -39,192 +48,277 @@ except :
         pass
 
 input("Press ENTER to confirm")
-print("Starting to download wallpapers in the wallpapers folder !")
+print("\nSearching wallpapers")
 
-nombres_images = 0
-lost = 0
+def download(url, img_number, pbar, img_type) :
+    global date
+    if img_type == "wallpaper" :
+        filename = 'wallpapers/wallpaper_' + str(img_number) + '_temp.jpg'
+    elif img_type == "screenshot" :
+        filename = 'wallpapers/screenshot_' + str(img_number) + '_temp.jpg'
+    else :
+        filename = 'wallpapers/devblog_' + str(img_number) + '_temp.jpg'
+    r = requests.get(url, stream = True)
+    x = re.compile(r"\d\d\d\d")  #to extract the date
+    if int(x.findall(r.headers['Last-Modified'])[0]) >= date :  #download only if it's recent enough
+        img_data = r.content
+        with open(filename, 'wb') as handler:
+            handler.write(img_data)
+        pbar.update(approx_file_size)
+    else :
+        pbar.total -= approx_file_size
+        pbar.refresh()
 
-def download(url, filename) :
-    img_data = requests.get(url).content
-    with open(filename, 'wb') as handler:
-        handler.write(img_data)
+def removeDoubles() :
+    #To check if an image is a double we check the hash of each files, if we find duplicates we remove the first one
+    #We use dhash and not just hash to remove duplicates pictures with different logos
+    file_list = os.listdir('wallpapers/')
+    duplicates = []
+    hash_keys = dict()
+    for index, filename in enumerate(os.listdir('wallpapers/')) :
+        if os.path.isfile('wallpapers/' + filename) :
+            try :
+                image = Image.open('wallpapers/' + filename)    #try to open the image, if it fails, delete it
+                row, col = dhash.dhash_row_col(image)
+                filehash = dhash.format_hex(row, col)
+                if filehash not in hash_keys :
+                    hash_keys[filehash] = index
+                else:
+                    duplicates.append((index,hash_keys[filehash]))
+            except :
+                os.remove('wallpapers/' + filename)
 
-def createNewDownloadThread(url, filename):
-    download_thread = threading.Thread(target=download, args=(url, filename))
-    download_thread.start()
+    print("Removing " + str(len(duplicates)) + " doubles !")
+
+    for index in duplicates :
+        #removing duplicates
+        os.remove('wallpapers/' + file_list[index[0]])
+
+def getWallpapers(page, lang) :
+    sublist=[]
+    url = "https://warthunder.com/" + lang + "/media/wallpapers/page/" + str(page)
+    r = requests.get(url, stream = True)
+    if r.status_code != 200 :
+        return []
+
+    soup = BeautifulSoup(r.text, 'html.parser')
+
+    links = soup.find_all('div', {'class': 'wallpapers__dimensions'})
+
+    image_links = []
+
+    for link in links :
+        try :
+            #getting every link for images in the page
+            image_links.append(link.find('a', {'class': 'wallpapers__dimensions-link gallery galleryScreenshot'}, text = resolution)['href'].replace('//', 'http://'))
+        except :
+            pass
+    for i in range(len(image_links)) :
+        img_link = image_links[i]
+        sublist.append(img_link)
+
+    if len(image_links) != 0 :
+        print(f"{len(image_links)} more images were found from {url} \r", end="")
+    return sublist
+
+masterlist = []
 
 #Looping through each language the user selected
 for lang in langs :
-    r = requests.get("https://warthunder.com/", stream = True) #initiating first connection, used for the while loop
     page = 1
+    stop = False
 
-    while r.status_code == 200 :    #looping until it gets a 404 error
-        url = "https://warthunder.com/" + lang + "/media/wallpapers/page/" + str(page)
-        r = requests.get(url, stream = True)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor :
+        while stop == False :    #looping until it gets a 404 error
+            thread1 = executor.submit(getWallpapers, page, lang)
+            page += 1
+            thread2 = executor.submit(getWallpapers, page, lang)
+            page += 1
+            thread3 = executor.submit(getWallpapers, page, lang)
+            page += 1
+            thread4 = executor.submit(getWallpapers, page, lang)
+            page += 1
+            masterlist.extend(thread1.result())
+            masterlist.extend(thread2.result())
+            masterlist.extend(thread3.result())
+            masterlist.extend(thread4.result())
+            if thread4.result() == [] :
+                stop = True
 
-        soup = BeautifulSoup(r.text, 'html.parser')
 
-        links = soup.find_all('div', {'class': 'wallpapers__dimensions'})
+approx_file_size = 698048 #in byte
+approx_file_size_total = len(masterlist)*approx_file_size
+print("\nChecking " + str(len(masterlist)) + " images")
 
-        image_links = []
-
-        for link in links :
-            try :
-                #getting every link for images in the page
-                image_links.append(link.find('a', {'class': 'wallpapers__dimensions-link gallery galleryScreenshot'}, text = resolution)['href'].replace('//', 'http://'))
-            except :
-                lost += 1
-        #Saving images from the links as temp to reorganise them later
-        for i in range(len(image_links)) :
-            img_link = image_links[i]
-            filename = 'wallpapers/wallpaper_' + str(i + nombres_images) + '_temp.jpg'
-            createNewDownloadThread(img_link, filename)
-
-        nombres_images += len(image_links)
-        if len(image_links) != 0 :
-            print(str(len(image_links)) + " images were downloaded from " + url)
-        page += 1
+#Starting download
+with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
+    pbar = tqdm(total=approx_file_size_total, unit='B', unit_scale=True)
+    for img_number, img_link in enumerate(masterlist) :
+        executor.submit(download, img_link, img_number, pbar, "wallpaper")
+pbar.close()
+print("Downloaded " + str(len(os.listdir('wallpapers/'))) + " images so far")
 
 #screenshots
+def getScreenshots(page, lang) :
+    sublist=[]
+    url = "https://warthunder.com/" + lang + "/media/screenshots/page/" + str(page)
+    r = requests.get(url, stream = True)
+    if r.status_code != 200 :
+        return []
+
+    soup = BeautifulSoup(r.text, 'html.parser')
+
+    links = soup.find_all('div', {'class': 'wallpapers__image'})
+
+    image_links = []
+
+    for link in links :
+        try :
+            #getting every link for images in the page
+            image_links.append(link.find('a', {'class': 'gallery galleryMode'})['href'].replace('//', 'http://'))
+        except :
+            pass
+    for i in range(len(image_links)) :
+        img_link = image_links[i]
+        sublist.append(img_link)
+
+    if len(image_links) != 0 :
+        print(f"{len(image_links)} more images were found from {url} \r", end="")
+    return sublist
+
 #Pretty same as above but for the screenshot page which has more or less the same structure
 if screenshot :
-    nombres_images = 0
-    print("Downloading screenshots")
+    masterlist = []
+    print("\nSearching screenshots")
     for lang in langs :
-        r = requests.get("https://warthunder.com/")
         page = 1
-        while r.status_code == 200 :
-            url = "https://warthunder.com/" + lang + "/media/screenshots/page/" + str(page)
-            r = requests.get(url)
+        stop = False
 
-            soup = BeautifulSoup(r.text, 'html.parser')
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor :
+            while stop == False :    #looping until it gets a 404 error
+                thread1 = executor.submit(getScreenshots, page, lang)
+                page += 1
+                thread2 = executor.submit(getScreenshots, page, lang)
+                page += 1
+                thread3 = executor.submit(getScreenshots, page, lang)
+                page += 1
+                thread4 = executor.submit(getScreenshots, page, lang)
+                page += 1
+                masterlist.extend(thread1.result())
+                masterlist.extend(thread2.result())
+                masterlist.extend(thread3.result())
+                masterlist.extend(thread4.result())
+                if thread4.result() == [] :
+                    stop = True
 
-            links = soup.find_all('div', {'class': 'wallpapers__image'})
+    approx_file_size_total = len(masterlist)*approx_file_size
+    print("\nChecking " + str(len(masterlist)) + " images")
 
-            image_links = []
-
-            for link in links :
-                try :
-                    image_links.append(link.find('a', {'class': 'gallery galleryMode'})['href'].replace('//', 'http://'))
-                except :
-                    pass
-
-            for i in range(len(image_links)) :
-                img_link = image_links[i]
-                filename = 'wallpapers/screenshot_' + str(i + nombres_images) + '_temp.jpg'
-                createNewDownloadThread(img_link, filename)
-
-            nombres_images += len(image_links)
-            if len(image_links) != 0 :
-                print(str(len(image_links)) + " images were downloaded from " + url)
-            page += 1
+    #Starting download
+    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
+        pbar = tqdm(total=approx_file_size_total, unit='B', unit_scale=True)
+        for img_number, img_link in enumerate(masterlist) :
+            executor.submit(download, img_link, img_number, pbar, "screenshot")
+    pbar.close()
+    print("Downloaded " + str(len(os.listdir('wallpapers/'))) + " images so far")
 
 #devblogs
 #devblog are quite differents as we are getting devblogs links then getting the wallpaper link if it exists and then saving it as temp once again
+def getDevblog(page) :
+    global resolution
+    sublist=[]
+    url = "https://warthunder.com/en/news/page/" + str(page) + "/?tags=Development"
+    r = requests.get(url, stream = True)
+    if r.status_code != 200 :
+        return []
+
+    soup = BeautifulSoup(r.text, 'html.parser')
+
+    links = soup.find_all('div', {'class': 'news-item'})
+
+    image_links = []
+
+    for link in links :
+        try :
+            #getting every link for images in the page
+            image_links.append("https://warthunder.com" + link.find("div", {"class": "news-item__anons"}).find('a', {'class': 'news-item__title'})['href'])
+        except :
+            pass
+    for i in range(len(image_links)) :
+        url_page = image_links[i]
+        r = requests.get(url_page)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        try :
+            img_link = soup.find("a", text = resolution)["href"]
+            if img_link.startswith("http") :    #Some older devblogs have a different file managing structure
+                pass
+            else :
+                img_link = "https://static.warthunder.com/" + img_link
+            sublist.append(img_link)
+        except :
+            pass
+    if sublist != [] :
+        print(f"{len(sublist)} more images were found from {url}")
+        #print(f"{len(sublist)} more images were found from {url} \r", end="")
+    return sublist
+
 if devblog :
+    masterlist = []
     nombres_images = 0
-    print("Downloading wallpapers from devblogs.")
-    r = requests.get("https://warthunder.com/")
+    print("Searching wallpapers from devblogs.")
     page = 1
     stop = False
-    while r.status_code == 200 and stop == False :
-        stop = True
-        lost = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor :
+        while stop == False :    #looping until it gets a 404 error
+            thread1 = executor.submit(getDevblog, page)
+            page += 1
+            thread2 = executor.submit(getDevblog, page)
+            page += 1
+            thread3 = executor.submit(getDevblog, page)
+            page += 1
+            thread4 = executor.submit(getDevblog, page)
+            page += 1
+            masterlist.extend(thread1.result())
+            masterlist.extend(thread2.result())
+            masterlist.extend(thread3.result())
+            masterlist.extend(thread4.result())
+            if thread4.result() == [] :
+                stop = True
 
-        url = "https://warthunder.com/en/news/page/" + str(page) + "/?tags=Development"
-        r = requests.get(url)
+    approx_file_size_total = len(masterlist)*approx_file_size
+    print("\nCheckin " + str(len(masterlist)) + " images")
 
-        soup = BeautifulSoup(r.text, 'html.parser')
+    #Starting download
+    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
+        pbar = tqdm(total=approx_file_size_total, unit='B', unit_scale=True)
+        for img_number, img_link in enumerate(masterlist) :
+            executor.submit(download, img_link, img_number, pbar, "devblog")
+    pbar.close()
+print("Downloaded " + str(len(os.listdir('wallpapers/'))) + " images so far")
 
-        links = soup.find_all('div', {'class': 'news-item'})
-
-        image_links = []
-
-        for link in links :
-            try :
-                image_links.append("https://warthunder.com/" + link.find("div", {"class": "news-item__anons"}).find('a', {'class': 'news-item__title'})['href'])
-            except :
-                pass
-
-        for i in range(len(image_links)) :
-            url_page = image_links[i]
-            r = requests.get(url_page)
-            soup = BeautifulSoup(r.text, 'html.parser')
-            try :
-                img_link = soup.find("a", text = resolution)["href"]
-                if img_link.startswith("http") :    #Some older devblogs have a different file managing structure
-                    pass
-                else :
-                    img_link = "https://static.warthunder.com/" + img_link
-                filename = 'wallpapers/devblog_' + str(i + nombres_images) + '_temp.jpg'
-                createNewDownloadThread(img_link, filename)
-                stop = False    #If it doesn't find a wallpaper for a whole page, the loop stops because the older devblogs don't have any wallpapers
-            except :
-                lost += 1   #We need to keep track of "lost" images because some devblogs don't have wallpapers
-
-        nombres_images += len(image_links) - lost
-        print(str(len(image_links) - lost) + " images were downloaded from " + url)
-        page += 1
-
-
-file_list = os.listdir('wallpapers/')
-print(str(len(file_list)) + " images enregistrées !")
-
-#Download of images is over, we now need to remove doubles
-#To check if an image is a double we check the hash of each files, if we find duplicates we remove the first one
-duplicates = []
-hash_keys = dict()
-for index, filename in enumerate(os.listdir('wallpapers/')) :
-    if os.path.isfile('wallpapers/' + filename) :
-        with open('wallpapers/' + filename, 'rb') as f :
-            filehash = hashlib.md5(f.read()).hexdigest()
-        if filehash not in hash_keys :
-            hash_keys[filehash] = index
-        else:
-            duplicates.append((index,hash_keys[filehash]))
-
-print("Removing " + str(len(duplicates)) + " doubles !")
-
-for index in duplicates :
-    #removing duplicates
-    os.remove('wallpapers/' + file_list[index[0]])
-
-print("Reorganising files !")
+print("Cleaning up")
+removeDoubles()
+print("Reorganising files")
 
 file_list = os.listdir('wallpapers/')
 #We now have an incomplete count (ie : 0 - 1 - 3 - 7 - 8...) and we want an homogeneous one
 #We do it first for screenshot by extracting files strating by "screenshot_"
 #note : a should be faster by using recursion but performance isn't really that much of a concern here
+filetypes = ["wallpaper_"]
 if screenshot :
-    working_file_list = [x for x in file_list if "screenshot_" in x]
+    filetypes.append("screenshot_")
+if devblog :
+    filetypes.append("devblog_")
+
+for filetype in filetypes :
+    working_file_list = [x for x in file_list if filetype in x]
     file_max = 0
     for file in working_file_list :
-        if int(file.replace("screenshot_", "").replace("_temp.jpg", "")) > file_max :
-            file_max = int(file.replace("screenshot_", "").replace("_temp.jpg", ""))
+        if int(file.replace(filetype, "").replace("_temp.jpg", "")) > file_max :
+            file_max = int(file.replace(filetype, "").replace("_temp.jpg", ""))
 
     for i in range(len(working_file_list)) :    #renaming files to fill the gap
-        os.rename('wallpapers/' + working_file_list[i], "wallpapers/screenshot_" + str(i) + ".jpg")
-
-#we do the same for devblog images
-if devblog :
-    working_file_list = [x for x in file_list if "devblog_" in x]
-    file_max = 0
-    for file in working_file_list :
-        if int(file.replace("devblog_", "").replace("_temp.jpg", "")) > file_max :
-            file_max = int(file.replace("devblog_", "").replace("_temp.jpg", ""))
-
-    for i in range(len(working_file_list)) :
-        os.rename('wallpapers/' + working_file_list[i], "wallpapers/devblog_" + str(i) + ".jpg")
-
-#and now for the regular wallpapers
-working_file_list = [x for x in file_list if "wallpaper_" in x]
-file_max = 0
-for file in working_file_list :
-    if int(file.replace("wallpaper_", "").replace("_temp.jpg", "")) > file_max :
-        file_max = int(file.replace("wallpaper_", "").replace("_temp.jpg", ""))
-
-for i in range(len(working_file_list)) :
-    os.rename('wallpapers/' + working_file_list[i], "wallpapers/wallpaper_" + str(i) + ".jpg")
+        os.rename('wallpapers/' + working_file_list[i], "wallpapers/" + filetype + str(i) + ".jpg")
 
 #Conclusion
 print(str(len(os.listdir('wallpapers/'))) + " unique images saved in the wallpapers folder !")
