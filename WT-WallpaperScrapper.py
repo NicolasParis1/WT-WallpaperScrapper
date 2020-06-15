@@ -3,18 +3,20 @@ from bs4 import BeautifulSoup
 import os
 import sys
 import configparser
-import threading
 import re
 import concurrent.futures
 from tqdm import tqdm
 import dhash
 from PIL import Image
-
-#Made in french then translated, sorry for french variable names
+from time import sleep
 
 #Initialisation
 global date
 global resolution
+global hash_keys
+global duplicates
+duplicates = []
+hash_keys = dict()
 
 #reading config file
 conf = configparser.ConfigParser()
@@ -26,6 +28,7 @@ langs = langs.replace(' ', '').replace('"', '').replace("'", '').strip('[]').spl
 screenshot = conf.get('config', 'screenshot') == "True"
 devblog = conf.get('config', 'devblog') == "True"
 date = int(conf.get('config', 'date'))
+overwriteMode = conf.get('config', 'overwriteMode') == "True"
 
 print("This tool will download wallpapers from the WarThunder website in a wallpapers folder in the same folder as this tool. The duration will depends on what you want to download and on your bandwidth")
 print("To change parameters (ie : what to download), edit the config.cfg file.\n")
@@ -41,7 +44,9 @@ try :
     os.makedirs('wallpapers/')
     print("Creating a wallpapers folder !")
 except :
-    if os.listdir('wallpapers/') != [] :
+    if overwriteMode :
+        pass
+    elif os.listdir('wallpapers/') != [] :
         input("Please delete the wallpapers folder, this tool will create one.\nPress ENTER to exit.")
         sys.exit()
     else :
@@ -72,10 +77,25 @@ def download(url, img_number, pbar, img_type) :
 def removeDoubles() :
     #To check if an image is a double we check the hash of each files, if we find duplicates we remove the first one
     #We use dhash and not just hash to remove duplicates pictures with different logos
+    global duplicates
     file_list = os.listdir('wallpapers/')
-    duplicates = []
-    hash_keys = dict()
-    for index, filename in enumerate(os.listdir('wallpapers/')) :
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        pbar = tqdm(total=len(file_list), unit='images')
+        for i in range(0, len(file_list), 10) :  #working 10 files at a time
+            workinglist = file_list[i:i+10]
+            executor.submit(hashThreaded, workinglist, pbar)
+    pbar.close()
+
+    print("Removing " + str(len(duplicates)) + " doubles !")
+    for index in duplicates :
+        #removing duplicates
+        os.remove('wallpapers/' + index[0])
+
+def hashThreaded(workinglist, pbar) :
+    global hash_keys
+    global duplicates
+    for index, filename in enumerate(workinglist) :
         if os.path.isfile('wallpapers/' + filename) :
             try :
                 image = Image.open('wallpapers/' + filename)    #try to open the image, if it fails, delete it
@@ -84,15 +104,10 @@ def removeDoubles() :
                 if filehash not in hash_keys :
                     hash_keys[filehash] = index
                 else:
-                    duplicates.append((index,hash_keys[filehash]))
+                    duplicates.append((filename,hash_keys[filehash]))
             except :
                 os.remove('wallpapers/' + filename)
-
-    print("Removing " + str(len(duplicates)) + " doubles !")
-
-    for index in duplicates :
-        #removing duplicates
-        os.remove('wallpapers/' + file_list[index[0]])
+            pbar.update(1)
 
 def getWallpapers(page, lang) :
     sublist=[]
@@ -118,7 +133,7 @@ def getWallpapers(page, lang) :
         sublist.append(img_link)
 
     if len(image_links) != 0 :
-        print(f"{len(image_links)} more images were found from {url} \r", end="")
+        print(f"{len(image_links)} more images were found from {url} for a total of {str(len(masterlist))} images\r", end="")
     return sublist
 
 masterlist = []
@@ -146,7 +161,7 @@ for lang in langs :
                 stop = True
 
 
-approx_file_size = 698048 #in byte
+approx_file_size = 750000 #in byte, estimated
 approx_file_size_total = len(masterlist)*approx_file_size
 print("\nChecking " + str(len(masterlist)) + " images")
 
@@ -183,7 +198,7 @@ def getScreenshots(page, lang) :
         sublist.append(img_link)
 
     if len(image_links) != 0 :
-        print(f"{len(image_links)} more images were found from {url} \r", end="")
+        print(f"{len(image_links)} more images were found from {url} for a total of {str(len(masterlist))} images\r", end="")
     return sublist
 
 #Pretty same as above but for the screenshot page which has more or less the same structure
@@ -226,6 +241,7 @@ if screenshot :
 #devblog are quite differents as we are getting devblogs links then getting the wallpaper link if it exists and then saving it as temp once again
 def getDevblog(page) :
     global resolution
+    global date
     sublist=[]
     url = "https://warthunder.com/en/news/page/" + str(page) + "/?tags=Development"
     r = requests.get(url, stream = True)
@@ -246,20 +262,25 @@ def getDevblog(page) :
             pass
     for i in range(len(image_links)) :
         url_page = image_links[i]
-        r = requests.get(url_page)
-        soup = BeautifulSoup(r.text, 'html.parser')
-        try :
-            img_link = soup.find("a", text = resolution)["href"]
-            if img_link.startswith("http") :    #Some older devblogs have a different file managing structure
+        r = requests.get(url_page, stream = True)
+        if r.status_code == 429 :
+            sleep(1)
+            continue
+        x = re.compile(r"\d\d\d\d")  #to extract the date
+        if int(x.findall(r.headers['Last-Modified'])[0]) >= date :  #To avoid looking up older devblogs but it's pretty unreliable
+            soup = BeautifulSoup(r.text, 'html.parser')
+            try :
+                img_link = soup.find("a", text = resolution)["href"]
+                if img_link.startswith("http") :    #Some older devblogs have a different file managing structure
+                    pass
+                else :
+                    img_link = "https://static.warthunder.com/" + img_link
+                sublist.append(img_link)
+            except :
                 pass
-            else :
-                img_link = "https://static.warthunder.com/" + img_link
-            sublist.append(img_link)
-        except :
-            pass
+        sleep(0.5) #to avoid status code 429
     if sublist != [] :
-        print(f"{len(sublist)} more images were found from {url}")
-        #print(f"{len(sublist)} more images were found from {url} \r", end="")
+        print(f"{len(sublist)} more images were found from {url} for a total of {str(len(masterlist))} images\r", end="")
     return sublist
 
 if devblog :
@@ -286,7 +307,7 @@ if devblog :
                 stop = True
 
     approx_file_size_total = len(masterlist)*approx_file_size
-    print("\nCheckin " + str(len(masterlist)) + " images")
+    print("\nChecking " + str(len(masterlist)) + " images")
 
     #Starting download
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
@@ -314,11 +335,11 @@ for filetype in filetypes :
     working_file_list = [x for x in file_list if filetype in x]
     file_max = 0
     for file in working_file_list :
-        if int(file.replace(filetype, "").replace("_temp.jpg", "")) > file_max :
-            file_max = int(file.replace(filetype, "").replace("_temp.jpg", ""))
+        if int(file.replace(filetype, "").replace("_temp", "").replace(".jpg", "")) > file_max :
+            file_max = int(file.replace(filetype, "").replace("_temp", "").replace(".jpg", ""))
 
     for i in range(len(working_file_list)) :    #renaming files to fill the gap
-        os.rename('wallpapers/' + working_file_list[i], "wallpapers/" + filetype + str(i) + ".jpg")
+        os.replace('wallpapers/' + working_file_list[i], "wallpapers/" + filetype + str(i) + ".jpg")
 
 #Conclusion
 print(str(len(os.listdir('wallpapers/'))) + " unique images saved in the wallpapers folder !")
