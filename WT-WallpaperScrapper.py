@@ -9,6 +9,7 @@ from tqdm import tqdm
 import dhash
 from PIL import Image
 from time import sleep
+import gettext
 
 #Initialisation
 global date
@@ -28,32 +29,39 @@ langs = langs.replace(' ', '').replace('"', '').replace("'", '').strip('[]').spl
 screenshot = conf.get('config', 'screenshot') == "True"
 devblog = conf.get('config', 'devblog') == "True"
 date = int(conf.get('config', 'date'))
-overwriteMode = conf.get('config', 'overwriteMode') == "True"
+overwriteMode = conf.get('tool config', 'overwriteMode') == "True"
+language = conf.get('tool config', 'language')
 
-print("This tool will download wallpapers from the WarThunder website in a wallpapers folder in the same folder as this tool. The duration will depends on what you want to download and on your bandwidth")
-print("To change parameters (ie : what to download), edit the config.cfg file.\n")
-print("Curent parameters :")
-print("Resolution : ", resolution)
-print("Download website(s) : ", langs)
-print("Download screenshot : ", screenshot)
-print("Download wallpapers from devblogs : ", devblog)
-print("Will not download images prior to : ", date)
+if language == "fr" :
+    fr = gettext.translation('lang', localedir='locale', languages=['fr'])
+    fr.install()
+else :  #elif language == "en" :
+    _ = lambda s: s
+
+print(_("This tool will download wallpapers from the WarThunder website in a wallpapers folder in the same folder as this tool. The duration will depends on what you want to download and on your bandwidth"))
+print(_("To change parameters (ie : what to download), edit the config.cfg file.\n"))
+print(_("Curent parameters :"))
+print(_("Resolution : "), resolution)
+print(_("Download website(s) : "), langs)
+print(_("Download screenshot : "), screenshot)
+print(_("Download wallpapers from devblogs : "), devblog)
+print(_("Will not download images prior to : "), date)
 
 #Creating a wallpapers folder, if already exists but empty continue, else prompt the user to delete it
 try :
     os.makedirs('wallpapers/')
-    print("Creating a wallpapers folder !")
+    print(_("Creating a wallpapers folder !"))
 except :
     if overwriteMode :
         pass
     elif os.listdir('wallpapers/') != [] :
-        input("Please delete the wallpapers folder, this tool will create one.\nPress ENTER to exit.")
+        input(_("Please delete the wallpapers folder, this tool will create one.\nPress ENTER to exit."))
         sys.exit()
     else :
         pass
 
-input("Press ENTER to confirm")
-print("\nSearching wallpapers")
+input(_("Press ENTER to confirm"))
+print(_("\nSearching wallpapers"))
 
 def download(url, img_number, pbar, img_type) :
     global date
@@ -87,7 +95,7 @@ def removeDoubles() :
             executor.submit(hashThreaded, workinglist, pbar)
     pbar.close()
 
-    print("Removing " + str(len(duplicates)) + " doubles !")
+    print(_("Removing %s doubles !") % (str(len(duplicates))))
     for index in duplicates :
         #removing duplicates
         os.remove('wallpapers/' + index[0])
@@ -133,7 +141,7 @@ def getWallpapers(page, lang) :
         sublist.append(img_link)
 
     if len(image_links) != 0 :
-        print(f"{len(image_links)} more images were found from {url} for a total of {str(len(masterlist))} images\r", end="")
+        print(_("%s more images were found from %s for a total of %s images\r") % (len(image_links), url, str(len(masterlist))), end="")
     return sublist
 
 masterlist = []
@@ -163,7 +171,7 @@ for lang in langs :
 
 approx_file_size = 750000 #in byte, estimated
 approx_file_size_total = len(masterlist)*approx_file_size
-print("\nChecking " + str(len(masterlist)) + " images")
+print(_("\nChecking %s images") % (str(len(masterlist))))
 
 #Starting download
 with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
@@ -171,7 +179,7 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
     for img_number, img_link in enumerate(masterlist) :
         executor.submit(download, img_link, img_number, pbar, "wallpaper")
 pbar.close()
-print("Downloaded " + str(len(os.listdir('wallpapers/'))) + " images so far")
+print(_("Downloaded %s images so far") % (str(len(os.listdir('wallpapers/')))))
 
 #screenshots
 def getScreenshots(page, lang) :
@@ -198,13 +206,13 @@ def getScreenshots(page, lang) :
         sublist.append(img_link)
 
     if len(image_links) != 0 :
-        print(f"{len(image_links)} more images were found from {url} for a total of {str(len(masterlist))} images\r", end="")
+        print(_("%s more images were found from %s for a total of %s images\r") % (len(image_links), url, str(len(masterlist))), end="")
     return sublist
 
 #Pretty same as above but for the screenshot page which has more or less the same structure
 if screenshot :
     masterlist = []
-    print("\nSearching screenshots")
+    print(_("\nSearching screenshots"))
     for lang in langs :
         page = 1
         stop = False
@@ -227,7 +235,7 @@ if screenshot :
                     stop = True
 
     approx_file_size_total = len(masterlist)*approx_file_size
-    print("\nChecking " + str(len(masterlist)) + " images")
+    print(_("\nChecking %s images") % (str(len(masterlist))))
 
     #Starting download
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
@@ -235,7 +243,7 @@ if screenshot :
         for img_number, img_link in enumerate(masterlist) :
             executor.submit(download, img_link, img_number, pbar, "screenshot")
     pbar.close()
-    print("Downloaded " + str(len(os.listdir('wallpapers/'))) + " images so far")
+    print(_("Downloaded %s images so far") % (str(len(os.listdir('wallpapers/')))))
 
 #devblogs
 #devblog are quite differents as we are getting devblogs links then getting the wallpaper link if it exists and then saving it as temp once again
@@ -280,13 +288,13 @@ def getDevblog(page) :
                 pass
         sleep(0.5) #to avoid status code 429
     if sublist != [] :
-        print(f"{len(sublist)} more images were found from {url} for a total of {str(len(masterlist))} images\r", end="")
+        print(_("%s more images were found from %s for a total of %s images\r") % (len(sublist), url, str(len(masterlist))), end="")
     return sublist
 
 if devblog :
     masterlist = []
     nombres_images = 0
-    print("Searching wallpapers from devblogs.")
+    print(_("Searching wallpapers from devblogs."))
     page = 1
     stop = False
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor :
@@ -307,7 +315,7 @@ if devblog :
                 stop = True
 
     approx_file_size_total = len(masterlist)*approx_file_size
-    print("\nChecking " + str(len(masterlist)) + " images")
+    print(_("\nChecking %s images") % (str(len(masterlist))))
 
     #Starting download
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
@@ -315,11 +323,11 @@ if devblog :
         for img_number, img_link in enumerate(masterlist) :
             executor.submit(download, img_link, img_number, pbar, "devblog")
     pbar.close()
-print("Downloaded " + str(len(os.listdir('wallpapers/'))) + " images so far")
+    print(_("Downloaded %s images so far") % (str(len(os.listdir('wallpapers/')))))
 
-print("Cleaning up")
+print(_("Cleaning up"))
 removeDoubles()
-print("Reorganising files")
+print(_("Reorganising files"))
 
 file_list = os.listdir('wallpapers/')
 #We now have an incomplete count (ie : 0 - 1 - 3 - 7 - 8...) and we want an homogeneous one
@@ -342,6 +350,6 @@ for filetype in filetypes :
         os.replace('wallpapers/' + working_file_list[i], "wallpapers/" + filetype + str(i) + ".jpg")
 
 #Conclusion
-print(str(len(os.listdir('wallpapers/'))) + " unique images saved in the wallpapers folder !")
-print("Thank you for using this tool made with ♥ by Rudlu")
-input("Press ENTER to exit")
+print(_("%s unique images saved in the wallpapers folder !") % (str(len(os.listdir('wallpapers/')))))
+print(_("Thank you for using this tool made with %s by Rudlu") % ("♥"))
+input(_("Press ENTER to exit"))

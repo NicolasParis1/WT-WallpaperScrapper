@@ -1,0 +1,121 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ORGANIZATION
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: 2020-06-17 00:02+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=cp1252\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: pygettext.py 1.5\n"
+
+
+#: WT-WallpaperScrapper.py:41
+msgid "This tool will download wallpapers from the WarThunder website in a wallpapers folder in the same folder as this tool. The duration will depends on what you want to download and on your bandwidth"
+msgstr ""
+
+#: WT-WallpaperScrapper.py:42
+msgid ""
+"To change parameters (ie : what to download), edit the config.cfg file.\n"
+msgstr ""
+
+#: WT-WallpaperScrapper.py:43
+msgid "Curent parameters :"
+msgstr ""
+
+#: WT-WallpaperScrapper.py:44
+msgid "Resolution : "
+msgstr ""
+
+#: WT-WallpaperScrapper.py:45
+msgid "Download website(s) : "
+msgstr ""
+
+#: WT-WallpaperScrapper.py:46
+msgid "Download screenshot : "
+msgstr ""
+
+#: WT-WallpaperScrapper.py:47
+msgid "Download wallpapers from devblogs : "
+msgstr ""
+
+#: WT-WallpaperScrapper.py:48
+msgid "Will not download images prior to : "
+msgstr ""
+
+#: WT-WallpaperScrapper.py:53
+msgid "Creating a wallpapers folder !"
+msgstr ""
+
+#: WT-WallpaperScrapper.py:58
+msgid ""
+"Please delete the wallpapers folder, this tool will create one.\n"
+"Press ENTER to exit."
+msgstr ""
+
+#: WT-WallpaperScrapper.py:63
+msgid "Press ENTER to confirm"
+msgstr ""
+
+#: WT-WallpaperScrapper.py:64
+msgid ""
+"\n"
+"Searching wallpapers"
+msgstr ""
+
+#: WT-WallpaperScrapper.py:98
+msgid "Removing %s doubles !"
+msgstr ""
+
+#: WT-WallpaperScrapper.py:144 WT-WallpaperScrapper.py:209
+#: WT-WallpaperScrapper.py:291
+msgid "%s more images were found from %s for a total of %s images\r"
+msgstr ""
+
+#: WT-WallpaperScrapper.py:174 WT-WallpaperScrapper.py:238
+#: WT-WallpaperScrapper.py:318
+msgid ""
+"\n"
+"Checking %s images"
+msgstr ""
+
+#: WT-WallpaperScrapper.py:182 WT-WallpaperScrapper.py:246
+#: WT-WallpaperScrapper.py:326
+msgid "Downloaded %s images so far"
+msgstr ""
+
+#: WT-WallpaperScrapper.py:215
+msgid ""
+"\n"
+"Searching screenshots"
+msgstr ""
+
+#: WT-WallpaperScrapper.py:297
+msgid "Searching wallpapers from devblogs."
+msgstr ""
+
+#: WT-WallpaperScrapper.py:328
+msgid "Cleaning up"
+msgstr ""
+
+#: WT-WallpaperScrapper.py:330
+msgid "Reorganising files"
+msgstr ""
+
+#: WT-WallpaperScrapper.py:353
+msgid "%s unique images saved in the wallpapers folder !"
+msgstr ""
+
+#: WT-WallpaperScrapper.py:354
+msgid "Thank you for using this tool made with %s by Rudlu"
+msgstr ""
+
+#: WT-WallpaperScrapper.py:355
+msgid "Press ENTER to exit"
+msgstr ""
+
